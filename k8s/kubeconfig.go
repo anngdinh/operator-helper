@@ -22,7 +22,6 @@ import (
 	"path/filepath"
 
 	"github.com/pkg/errors"
-	"github.com/vngcloud/vngcloud-fleet-controller/pkg/contexts"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
@@ -30,6 +29,8 @@ import (
 	"sigs.k8s.io/cluster-api/cmd/clusterctl/client/cluster"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	configclient "sigs.k8s.io/controller-runtime/pkg/client/config"
+
+	"github.com/anngdinh/operator-helper/contexts"
 )
 
 type Getter interface {
