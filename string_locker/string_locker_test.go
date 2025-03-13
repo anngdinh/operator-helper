@@ -51,3 +51,11 @@ func TestStringKeyLocker_ConcurrentLocks(t *testing.T) {
 
 	wg.Wait() // Ensure all goroutines complete
 }
+
+func TestStringKeyLocker_UnlockManyTimes(t *testing.T) {
+	locker := &StringKeyLocker{}
+
+	locker.Lock("key")
+	locker.Unlock("key")
+	locker.Unlock("key") // Should not panic
+}

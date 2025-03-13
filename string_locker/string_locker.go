@@ -25,4 +25,5 @@ func (l *StringKeyLocker) Unlock(key string) {
 	}
 	mutex := val.(*sync.Mutex)
 	mutex.Unlock()
+	l.locks.Delete(key)
 }
