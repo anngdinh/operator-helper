@@ -14,6 +14,9 @@ var vngCloudProviderIDRegex = regexp.MustCompile("^ins-[0-9a-f]{8}-[0-9a-f]{4}-[
 // GetNodeCondition will get pointer to Node's existing condition.
 // returns nil if no matching condition found.
 func GetNodeCondition(node *corev1.Node, conditionType corev1.NodeConditionType) *corev1.NodeCondition {
+	if node == nil {
+		return nil
+	}
 	for i := range node.Status.Conditions {
 		if node.Status.Conditions[i].Type == conditionType {
 			return &node.Status.Conditions[i]
@@ -37,6 +40,9 @@ func ExtractNodeInstanceID(node *corev1.Node) (string, error) {
 }
 
 func FilterNodeWithLabel(nodes []*corev1.Node, nodeLabels map[string]string) []*corev1.Node {
+	if len(nodeLabels) == 0 {
+		return nodes
+	}
 	var filtered []*corev1.Node
 	for _, node := range nodes {
 		if node == nil {
@@ -46,6 +52,26 @@ func FilterNodeWithLabel(nodes []*corev1.Node, nodeLabels map[string]string) []*
 			continue
 		}
 		if labels.Set(nodeLabels).AsSelector().Matches(labels.Set(node.Labels)) {
+			filtered = append(filtered, node)
+		}
+	}
+	return filtered
+}
+
+func FilterNodeWithoutLabel(nodes []*corev1.Node, nodeLabels map[string]string) []*corev1.Node {
+	if len(nodeLabels) == 0 {
+		return []*corev1.Node{}
+	}
+	var filtered []*corev1.Node
+	for _, node := range nodes {
+		if node == nil {
+			continue
+		}
+		if node.Labels == nil {
+			filtered = append(filtered, node)
+			continue
+		}
+		if !labels.Set(nodeLabels).AsSelector().Matches(labels.Set(node.Labels)) {
 			filtered = append(filtered, node)
 		}
 	}

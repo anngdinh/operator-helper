@@ -1,7 +1,6 @@
 package string_locker
 
 import (
-	"fmt"
 	"sync"
 )
 
@@ -21,7 +20,8 @@ func (l *StringKeyLocker) Lock(key string) {
 func (l *StringKeyLocker) Unlock(key string) {
 	val, ok := l.locks.Load(key)
 	if !ok {
-		panic(fmt.Sprintf("attempt to unlock a non-existent key: %s", key))
+		// panic(fmt.Sprintf("attempt to unlock a non-existent key: %s", key))
+		return
 	}
 	mutex := val.(*sync.Mutex)
 	mutex.Unlock()
