@@ -83,3 +83,29 @@ func TestDeleteObjectWithRetry(t *testing.T) {
 	assert.Error(t, err)
 	assert.True(t, client.IgnoreNotFound(err) == nil)
 }
+
+func TestCreateObjectWithRetry_GenerateName(t *testing.T) {
+	scheme := runtime.NewScheme()
+	_ = corev1.AddToScheme(scheme)
+
+	cl := fake.NewClientBuilder().WithScheme(scheme).Build()
+	ctx := context.Background()
+
+	cm := &corev1.ConfigMap{
+		ObjectMeta: v1.ObjectMeta{
+			GenerateName: "gen-cm-",
+			Namespace:    "default",
+		},
+		Data: map[string]string{"generated": "true"},
+	}
+
+	err := CreateObjectWithRetry(ctx, cl, cm)
+	require.NoError(t, err)
+
+	assert.NotEmpty(t, cm.Name, "Name should be populated after creation")
+
+	var fetched corev1.ConfigMap
+	err = cl.Get(ctx, types.NamespacedName{Name: cm.Name, Namespace: "default"}, &fetched)
+	require.NoError(t, err)
+	assert.Equal(t, "true", fetched.Data["generated"])
+}
