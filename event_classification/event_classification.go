@@ -1,7 +1,9 @@
 package event_classification
 
 import (
-	"github.com/sirupsen/logrus"
+	"context"
+
+	"github.com/anngdinh/operator-helper/contexts"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -34,16 +36,18 @@ func NewEventClassification(getResourceByKey func(key string) (client.Object, bo
 	}
 }
 
-func (ec *EventClassification) Classify(key string) *Event {
+func (ec *EventClassification) Classify(ctx context.Context, key string) *Event {
+	logger := contexts.NewContext(ctx).Log()
+
 	objGet, okGet := ec.getResourceByKey(key)
 	objCache, okCache := ec.cache[key]
 
 	objGetValid, objCacheValid := ec.isValid(objGet), ec.isValid(objCache)
 
-	// logrus.Infof("objGet: %v, objCache: %v", objGet, objCache)
-	logrus.Debug("Event Classification")
-	logrus.Debugf("   okGet:   %v, objGetValid:   %v", okGet, objGetValid)
-	logrus.Debugf("   okCache: %v, objCacheValid: %v", okCache, objCacheValid)
+	// logger.Infof("objGet: %v, objCache: %v", objGet, objCache)
+	logger.Debug("Event Classification")
+	logger.Debugf("   okGet:   %v, objGetValid:   %v", okGet, objGetValid)
+	logger.Debugf("   okCache: %v, objCacheValid: %v", okCache, objCacheValid)
 
 	// if objGet is deleted, but objCache is exist, then delete
 	if okCache && !okGet {
@@ -56,7 +60,7 @@ func (ec *EventClassification) Classify(key string) *Event {
 
 	// if objGet, objCache is exist, but objGet have deletionTimestamp, then delete
 	if okGet && isHaveDeleteTimestamp(objGet) {
-		logrus.Debug("Object have deletionTimestamp, delete event.")
+		logger.Debug("Object have deletionTimestamp, delete event.")
 		delete(ec.cache, key)
 		return &Event{
 			Type: DeleteEvent,

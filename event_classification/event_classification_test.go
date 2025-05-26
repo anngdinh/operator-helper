@@ -1,6 +1,7 @@
 package event_classification
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -49,9 +50,10 @@ func TestEventClassification_Classify(t *testing.T) {
 	// Create an EventClassification instance
 	ec := NewEventClassification(getResourceByKey, isValid)
 
+	ctx := context.TODO()
 	// Test CreateEvent
 	t.Run("CreateEvent", func(t *testing.T) {
-		event := ec.Classify("valid-resource")
+		event := ec.Classify(ctx, "valid-resource")
 		assert.NotNil(t, event)
 		assert.Equal(t, CreateEvent, event.Type)
 		assert.Equal(t, "valid-resource", event.Obj.GetName())
@@ -60,7 +62,7 @@ func TestEventClassification_Classify(t *testing.T) {
 	// Test DeleteEvent (when object is deleted in API, but exists in cache)
 	t.Run("DeleteEventFromCache", func(t *testing.T) {
 		ec.cache["deleted-resource"] = &MockObject{name: "deleted-resource"}
-		event := ec.Classify("deleted-resource")
+		event := ec.Classify(ctx, "deleted-resource")
 		assert.NotNil(t, event)
 		assert.Equal(t, DeleteEvent, event.Type)
 		assert.Equal(t, "deleted-resource", event.Obj.GetName())
@@ -68,7 +70,7 @@ func TestEventClassification_Classify(t *testing.T) {
 
 	// Test DeleteEvent (when resource has deletion timestamp)
 	t.Run("DeleteEventWithDeletionTimestamp", func(t *testing.T) {
-		event := ec.Classify("deleted-resource")
+		event := ec.Classify(ctx, "deleted-resource")
 		assert.NotNil(t, event)
 		assert.Equal(t, DeleteEvent, event.Type)
 		assert.Equal(t, "deleted-resource", event.Obj.GetName())
@@ -77,7 +79,7 @@ func TestEventClassification_Classify(t *testing.T) {
 	// Test SyncEvent
 	t.Run("SyncEvent", func(t *testing.T) {
 		ec.cache["valid-resource"] = &MockObject{name: "valid-resource"}
-		event := ec.Classify("valid-resource")
+		event := ec.Classify(ctx, "valid-resource")
 		assert.NotNil(t, event)
 		assert.Equal(t, SyncEvent, event.Type)
 		assert.Equal(t, "valid-resource", event.Obj.GetName())
@@ -90,7 +92,7 @@ func TestEventClassification_Classify(t *testing.T) {
 			return &MockObject{name: ""}, true
 		}
 		invalidEC := NewEventClassification(invalidGetResourceByKey, isValid)
-		event := invalidEC.Classify("invalid-resource")
+		event := invalidEC.Classify(ctx, "invalid-resource")
 		assert.Nil(t, event)
 	})
 }
