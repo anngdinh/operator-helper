@@ -25,7 +25,7 @@ func TestNewRequeueNeeded(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewRequeueNeeded(tt.args.msg)
+			got := NewNeedRequeue(tt.args.msg)
 			assert.Equal(t, tt.wantReason, got.Reason())
 		})
 	}
@@ -54,7 +54,7 @@ func TestNewRequeueNeededAfter(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewRequeueNeededAfter(tt.args.msg, tt.args.duration)
+			got := NewNeedRequeueAfter(tt.args.msg, tt.args.duration)
 			assert.Equal(t, tt.wantReason, got.Reason())
 			assert.Equal(t, 3*time.Second, got.Duration())
 		})
