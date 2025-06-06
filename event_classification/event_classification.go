@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/anngdinh/operator-helper/contexts"
+	"github.com/anngdinh/operator-helper/multilock"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -26,6 +27,7 @@ type EventClassification struct {
 	cache            map[string]client.Object
 	getResourceByKey func(key string) (client.Object, bool)
 	isValid          func(obj client.Object) bool
+	multiLock        *multilock.MultiLock
 }
 
 func NewEventClassification(getResourceByKey func(key string) (client.Object, bool), isValid func(obj client.Object) bool) *EventClassification {
@@ -33,11 +35,14 @@ func NewEventClassification(getResourceByKey func(key string) (client.Object, bo
 		cache:            make(map[string]client.Object),
 		getResourceByKey: getResourceByKey,
 		isValid:          isValid,
+		multiLock:        multilock.NewMultipleLock(),
 	}
 }
 
 func (ec *EventClassification) Classify(ctx context.Context, key string) *Event {
 	logger := contexts.NewContext(ctx).Log()
+	ec.multiLock.Lock(key)
+	defer ec.multiLock.Unlock(key)
 
 	objGet, okGet := ec.getResourceByKey(key)
 	objCache, okCache := ec.cache[key]
