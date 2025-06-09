@@ -2,6 +2,7 @@ package event_classification
 
 import (
 	"context"
+	"sync"
 
 	"github.com/anngdinh/operator-helper/contexts"
 	"github.com/anngdinh/operator-helper/multilock"
@@ -24,10 +25,13 @@ type Event struct {
 }
 
 type EventClassification struct {
-	cache            map[string]client.Object
+	multiLock *multilock.MultiLock // lock by key
+
+	mu    sync.RWMutex // use for the map below
+	cache map[string]client.Object
+
 	getResourceByKey func(key string) (client.Object, bool)
 	isValid          func(obj client.Object) bool
-	multiLock        *multilock.MultiLock
 }
 
 func NewEventClassification(getResourceByKey func(key string) (client.Object, bool), isValid func(obj client.Object) bool) *EventClassification {
@@ -45,7 +49,8 @@ func (ec *EventClassification) Classify(ctx context.Context, key string) *Event 
 	defer ec.multiLock.Unlock(key)
 
 	objGet, okGet := ec.getResourceByKey(key)
-	objCache, okCache := ec.cache[key]
+
+	objCache, okCache := ec.readCache(key)
 
 	objGetValid, objCacheValid := ec.isValid(objGet), ec.isValid(objCache)
 
@@ -56,7 +61,7 @@ func (ec *EventClassification) Classify(ctx context.Context, key string) *Event 
 
 	// if objGet is deleted, but objCache is exist, then delete
 	if okCache && !okGet {
-		delete(ec.cache, key)
+		ec.deleteCache(key)
 		return &Event{
 			Type: DeleteEvent,
 			Obj:  objCache,
@@ -66,7 +71,7 @@ func (ec *EventClassification) Classify(ctx context.Context, key string) *Event 
 	// if objGet, objCache is exist, but objGet have deletionTimestamp, then delete
 	if okGet && isHaveDeleteTimestamp(objGet) {
 		logger.Debug("Object have deletionTimestamp, delete event.")
-		delete(ec.cache, key)
+		ec.deleteCache(key)
 		return &Event{
 			Type: DeleteEvent,
 			Obj:  objGet,
@@ -77,7 +82,7 @@ func (ec *EventClassification) Classify(ctx context.Context, key string) *Event 
 		if !objGetValid {
 			return nil
 		}
-		ec.cache[key] = objGet
+		ec.writeCache(key, objGet)
 		return &Event{
 			Type: CreateEvent,
 			Obj:  objGet,
@@ -94,7 +99,7 @@ func (ec *EventClassification) Classify(ctx context.Context, key string) *Event 
 		}
 
 		if !objGetValid {
-			delete(ec.cache, key)
+			ec.deleteCache(key)
 			return &Event{
 				Type: DeleteEvent,
 				Obj:  objCache,
@@ -102,7 +107,7 @@ func (ec *EventClassification) Classify(ctx context.Context, key string) *Event 
 		}
 
 		if !objCacheValid {
-			ec.cache[key] = objGet
+			ec.writeCache(key, objGet)
 			return &Event{
 				Type: CreateEvent,
 				Obj:  objGet,
@@ -111,12 +116,31 @@ func (ec *EventClassification) Classify(ctx context.Context, key string) *Event 
 	}
 
 	// okCache && okGet && objGetValid && objCacheValid
-	ec.cache[key] = objGet
+	ec.writeCache(key, objGet)
 	return &Event{
 		Type:   SyncEvent,
 		Obj:    objGet,
 		OldObj: objCache,
 	}
+}
+
+func (ec *EventClassification) writeCache(key string, value client.Object) {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+	ec.cache[key] = value
+}
+
+func (ec *EventClassification) readCache(key string) (client.Object, bool) {
+	ec.mu.RLock()
+	defer ec.mu.RUnlock()
+	objCache, okCache := ec.cache[key]
+	return objCache, okCache
+}
+
+func (ec *EventClassification) deleteCache(key string) {
+	ec.mu.Lock()
+	defer ec.mu.Unlock()
+	delete(ec.cache, key)
 }
 
 func isHaveDeleteTimestamp(obj client.Object) bool {

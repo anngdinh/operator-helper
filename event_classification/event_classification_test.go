@@ -2,7 +2,9 @@ package event_classification
 
 import (
 	"context"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -95,4 +97,100 @@ func TestEventClassification_Classify(t *testing.T) {
 		event := invalidEC.Classify(ctx, "invalid-resource")
 		assert.Nil(t, event)
 	})
+}
+
+func TestEventClassification_Stress(t *testing.T) {
+	// Helper functions
+	isValid := func(obj client.Object) bool {
+		return obj != nil && obj.GetName() != ""
+	}
+
+	getResourceByKey := func(key string) (client.Object, bool) {
+		if key == "valid-resource" {
+			return &MockObject{name: "valid-resource"}, true
+		}
+		if key == "deleted-resource" {
+			now := v1.Now()
+			return &MockObject{name: "deleted-resource", deletionTimestamp: &now}, true
+		}
+		return nil, false
+	}
+
+	// Create an EventClassification instance
+	ec := NewEventClassification(getResourceByKey, isValid)
+	ctx := context.TODO()
+
+	// Number of concurrent operations
+	numGoroutines := 100
+	numOperations := 1000
+
+	// Channel to collect results
+	results := make(chan *Event, numGoroutines*numOperations)
+	errors := make(chan error, numGoroutines*numOperations)
+
+	// Start timing
+	start := time.Now()
+
+	// Launch goroutines
+	for i := 0; i < numGoroutines; i++ {
+		go func(id int) {
+			for j := 0; j < numOperations; j++ {
+				// Alternate between different types of resources
+				resourceKey := "valid-resource"
+				if j%3 == 0 {
+					resourceKey = "deleted-resource"
+				}
+
+				event := ec.Classify(ctx, resourceKey)
+				if event == nil {
+					errors <- fmt.Errorf("goroutine %d: got nil event for resource %s", id, resourceKey)
+					continue
+				}
+
+				// Verify event properties
+				if event.Obj == nil {
+					errors <- fmt.Errorf("goroutine %d: event.Obj is nil", id)
+					continue
+				}
+
+				if event.Obj.GetName() != resourceKey {
+					errors <- fmt.Errorf("goroutine %d: expected name %s, got %s", id, resourceKey, event.Obj.GetName())
+					continue
+				}
+
+				results <- event
+			}
+		}(i)
+	}
+
+	// Collect results
+	var eventCounts = make(map[EventType]int)
+	for i := 0; i < numGoroutines*numOperations; i++ {
+		select {
+		case event := <-results:
+			eventCounts[event.Type]++
+		case err := <-errors:
+			t.Errorf("Error during stress test: %v", err)
+		}
+	}
+
+	// Calculate duration
+	duration := time.Since(start)
+
+	// Verify results
+	t.Logf("Stress test completed in %v", duration)
+	t.Logf("Total events processed: %d", numGoroutines*numOperations)
+	t.Logf("Event type distribution: %+v", eventCounts)
+
+	// Verify we have a reasonable distribution of event types
+	assert.Greater(t, eventCounts[CreateEvent], 0, "Should have some create events")
+	assert.Greater(t, eventCounts[DeleteEvent], 0, "Should have some delete events")
+	assert.Greater(t, eventCounts[SyncEvent], 0, "Should have some sync events")
+
+	// Verify total count
+	totalEvents := 0
+	for _, count := range eventCounts {
+		totalEvents += count
+	}
+	assert.Equal(t, numGoroutines*numOperations, totalEvents, "Total events should match expected count")
 }
