@@ -14,6 +14,11 @@ func HandleReconcileError(err error, log *logrus.Entry) (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
+	var wrapper *wrapperReconcileError
+	if errors.As(err, &wrapper) {
+		return wrapper.result, wrapper.err
+	}
+
 	var requeueNeededAfter *NeedRequeueAfter
 	if errors.As(err, &requeueNeededAfter) {
 		log.Info("requeue after duration: ", requeueNeededAfter.Duration(), ", reason: ", requeueNeededAfter.Reason())

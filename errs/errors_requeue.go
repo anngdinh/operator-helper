@@ -3,6 +3,8 @@ package errs
 import (
 	"fmt"
 	"time"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 // NewRequeueNeeded constructs new RequeueError to
@@ -81,4 +83,26 @@ func (e *NoNeedRequeue) Reason() string {
 }
 func (e *NoNeedRequeue) Error() string {
 	return fmt.Sprintf("no need to requeue: %v", e.reason)
+}
+
+// ----------------------------------------------------------
+var _ error = &wrapperReconcileError{}
+
+type wrapperReconcileError struct {
+	result ctrl.Result
+	err    error
+}
+
+func (e *wrapperReconcileError) Error() string {
+	return fmt.Sprintf("err: %s, requeue %t, after %s.", e.err.Error(), e.result.Requeue, e.result.RequeueAfter)
+}
+
+func NewReconcileError(isRequeue bool, requeueAfter time.Duration, err error) error {
+	return &wrapperReconcileError{
+		result: ctrl.Result{
+			Requeue:      isRequeue,
+			RequeueAfter: requeueAfter,
+		},
+		err: err,
+	}
 }

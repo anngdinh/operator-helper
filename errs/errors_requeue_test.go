@@ -60,3 +60,8 @@ func TestNewRequeueNeededAfter(t *testing.T) {
 		})
 	}
 }
+
+func TestNewReconcileError(t *testing.T) {
+	_ = NewReconcileError(false, 0, nil)
+
+}
