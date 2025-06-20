@@ -194,3 +194,97 @@ func TestEventClassification_Stress(t *testing.T) {
 	}
 	assert.Equal(t, numGoroutines*numOperations, totalEvents, "Total events should match expected count")
 }
+
+func TestEventClassification_EmptyKeyGuards(t *testing.T) {
+	isValid := func(obj client.Object) bool {
+		return obj != nil && obj.GetName() != ""
+	}
+	getResourceByKey := func(key string) (client.Object, bool) {
+		return &MockObject{name: "some-resource"}, true
+	}
+	// Create an EventClassification instance
+	ec := NewEventClassification(getResourceByKey, isValid)
+	ctx := context.TODO()
+
+	t.Run("Classify with empty key returns nil", func(t *testing.T) {
+		event := ec.Classify(ctx, "")
+		assert.Nil(t, event)
+	})
+
+	t.Run("writeCache with empty key does not panic or write", func(t *testing.T) {
+		ec.writeCache("", &MockObject{name: "should-not-write"})
+		_, exists := ec.cache[""]
+		assert.False(t, exists)
+	})
+
+	t.Run("readCache with empty key returns nil, false", func(t *testing.T) {
+		obj, ok := ec.readCache("")
+		assert.Nil(t, obj)
+		assert.False(t, ok)
+	})
+
+	t.Run("deleteCache with empty key does not panic", func(t *testing.T) {
+		// Should not panic or affect the map
+		ec.cache["foo"] = &MockObject{name: "foo"}
+		ec.deleteCache("")
+		_, exists := ec.cache["foo"]
+		assert.True(t, exists)
+	})
+}
+
+func TestEventClassification_Classify_AllBranches(t *testing.T) {
+	ctx := context.TODO()
+
+	// 1. Both cache and get are missing: !okCache && !okGet
+	{
+		isValid := func(obj client.Object) bool { return false }
+		getResourceByKey := func(key string) (client.Object, bool) { return nil, false }
+		ec := NewEventClassification(getResourceByKey, isValid)
+		event := ec.Classify(ctx, "missing-resource")
+		assert.Nil(t, event)
+	}
+
+	// 2. Both cache and get exist, but both are invalid: okCache && okGet && !objGetValid && !objCacheValid
+	{
+		isValid := func(obj client.Object) bool { return false }
+		getResourceByKey := func(key string) (client.Object, bool) { return &MockObject{name: "invalid"}, true }
+		ec := NewEventClassification(getResourceByKey, isValid)
+		ec.cache["invalid-resource"] = &MockObject{name: "invalid"}
+		event := ec.Classify(ctx, "invalid-resource")
+		assert.Nil(t, event)
+	}
+
+	// 3. okCache && okGet, objGetValid is false, objCacheValid is true: should trigger DeleteEvent
+	{
+		isValid := func(obj client.Object) bool {
+			if obj == nil {
+				return false
+			}
+			return obj.GetName() == "valid" // only cache is valid
+		}
+		getResourceByKey := func(key string) (client.Object, bool) { return &MockObject{name: "invalid"}, true }
+		ec := NewEventClassification(getResourceByKey, isValid)
+		ec.cache["resource"] = &MockObject{name: "valid"}
+		event := ec.Classify(ctx, "resource")
+		assert.NotNil(t, event)
+		assert.Equal(t, DeleteEvent, event.Type)
+		assert.Equal(t, "valid", event.Obj.GetName())
+	}
+
+	// 4. okCache && okGet, objGetValid is true, objCacheValid is false: should trigger CreateEvent
+	{
+		isValid := func(obj client.Object) bool {
+			if obj == nil {
+				return false
+			}
+			return obj.GetName() == "valid" // only get is valid
+		}
+		getResourceByKey := func(key string) (client.Object, bool) { return &MockObject{name: "valid"}, true }
+		ec := NewEventClassification(getResourceByKey, isValid)
+		ec.cache["resource"] = &MockObject{name: "invalid"}
+		event := ec.Classify(ctx, "resource")
+		assert.NotNil(t, event)
+		assert.Equal(t, CreateEvent, event.Type)
+		assert.Equal(t, "valid", event.Obj.GetName())
+	}
+}

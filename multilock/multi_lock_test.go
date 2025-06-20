@@ -79,10 +79,63 @@ func TestStringKeyLocker_ConcurrentLocks(t *testing.T) {
 	wg.Wait() // Ensure all goroutines complete
 }
 
-// func TestStringKeyLocker_UnlockManyTimes(t *testing.T) {
-// 	locker := NewMultipleLock()
+func TestStringKeyLocker_UnlockManyTimes(t *testing.T) {
+	locker := NewMultipleLock()
 
-// 	locker.Lock("key")
-// 	locker.Unlock("key")
-// 	locker.Unlock("key") // Should not panic
-// }
+	locker.Lock("key")
+	locker.Unlock("key")
+	// Unlocking more times than locked should not panic
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("Unlocking more times than locked should not panic, but got panic: %v", r)
+		}
+	}()
+	locker.Unlock("key")
+}
+
+func TestMultiLockRLockRUnlock(t *testing.T) {
+	locker := NewMultipleLock()
+	key := "rlock-key"
+	locked := make(chan struct{})
+	unlocked := make(chan struct{})
+
+	// Lock for reading in one goroutine
+	go func() {
+		locker.RLock(key)
+		locked <- struct{}{}
+		time.Sleep(100 * time.Millisecond)
+		locker.RUnlock(key)
+		unlocked <- struct{}{}
+	}()
+
+	<-locked
+	// Try to acquire another RLock (should not block)
+	locker.RLock(key)
+	locker.RUnlock(key)
+	<-unlocked
+}
+
+func TestMultiLockWithNonStringKey(t *testing.T) {
+	locker := NewMultipleLock()
+	type customKey struct{ id int }
+	key := customKey{42}
+	locked := make(chan struct{})
+	unlocked := make(chan struct{})
+
+	go func() {
+		locker.Lock(key)
+		locked <- struct{}{}
+		time.Sleep(50 * time.Millisecond)
+		locker.Unlock(key)
+		unlocked <- struct{}{}
+	}()
+
+	<-locked
+	// Try to acquire the lock in main goroutine (should block until unlocked)
+	go func() {
+		locker.Lock(key)
+		locker.Unlock(key)
+		unlocked <- struct{}{}
+	}()
+	<-unlocked
+}

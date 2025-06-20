@@ -45,6 +45,12 @@ func NewEventClassification(getResourceByKey func(key string) (client.Object, bo
 
 func (ec *EventClassification) Classify(ctx context.Context, key string) *Event {
 	logger := contexts.NewContext(ctx).Log()
+
+	if key == "" {
+		logger.Errorf("event_classification: received empty key")
+		return nil
+	}
+
 	ec.multiLock.Lock(key)
 	defer ec.multiLock.Unlock(key)
 
@@ -125,12 +131,18 @@ func (ec *EventClassification) Classify(ctx context.Context, key string) *Event 
 }
 
 func (ec *EventClassification) writeCache(key string, value client.Object) {
+	if key == "" {
+		return
+	}
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
 	ec.cache[key] = value
 }
 
 func (ec *EventClassification) readCache(key string) (client.Object, bool) {
+	if key == "" {
+		return nil, false
+	}
 	ec.mu.RLock()
 	defer ec.mu.RUnlock()
 	objCache, okCache := ec.cache[key]
@@ -138,6 +150,9 @@ func (ec *EventClassification) readCache(key string) (client.Object, bool) {
 }
 
 func (ec *EventClassification) deleteCache(key string) {
+	if key == "" {
+		return
+	}
 	ec.mu.Lock()
 	defer ec.mu.Unlock()
 	delete(ec.cache, key)

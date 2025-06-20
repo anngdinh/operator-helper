@@ -32,7 +32,9 @@ func (mLock *MultiLock) Lock(key interface{}) {
 
 func (mLock *MultiLock) Unlock(key interface{}) {
 	lock := mLock.releaseLock(key)
-	lock.Unlock()
+	if lock != nil {
+		lock.Unlock()
+	}
 }
 
 func (mLock *MultiLock) RLock(key interface{}) {
@@ -42,7 +44,9 @@ func (mLock *MultiLock) RLock(key interface{}) {
 
 func (mLock *MultiLock) RUnlock(key interface{}) {
 	lock := mLock.releaseLock(key)
-	lock.RUnlock()
+	if lock != nil {
+		lock.RUnlock()
+	}
 }
 
 func (mLock *MultiLock) getLock(key interface{}) *keyLock {
@@ -67,10 +71,14 @@ func (mLock *MultiLock) releaseLock(key interface{}) *sync.RWMutex {
 	mLock.iLock.Lock()
 	kl := mLock.getLock(key)
 	kl.counter--
+	shouldUnlock := kl.counter >= 0
 	if kl.counter <= 0 {
 		mLock.pool.Put(kl.lock)
 		mLock.inUse.Delete(key)
 	}
 	mLock.iLock.Unlock()
-	return kl.lock
+	if shouldUnlock {
+		return kl.lock
+	}
+	return nil
 }
