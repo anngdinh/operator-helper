@@ -2,6 +2,7 @@ package notify
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -67,8 +68,15 @@ func (m *Message) GetBodyTelegram() string {
 	// // title
 	// builder.WriteString(fmt.Sprintf("%s %s\n", icon, m.title))
 
+	// order attributes alphabetically
+	keys := make([]string, 0, len(m.attributes))
+	for key := range m.attributes {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	// attributes
-	for key, value := range m.attributes {
+	for _, key := range keys {
+		value := m.attributes[key]
 		builder.WriteString(fmt.Sprintf("- *%s*: `%s`\n", key, value))
 	}
 
@@ -95,8 +103,15 @@ func (m *Message) GetBodyMSTeams() string {
 	// // title
 	// builder.WriteString(fmt.Sprintf("**%s %s**\n\n", icon, m.title))
 
+	// order attributes alphabetically
+	keys := make([]string, 0, len(m.attributes))
+	for key := range m.attributes {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	// attributes
-	for key, value := range m.attributes {
+	for _, key := range keys {
+		value := m.attributes[key]
 		builder.WriteString(fmt.Sprintf("**%s:** %s  \n", key, value)) // double space for line break
 	}
 
